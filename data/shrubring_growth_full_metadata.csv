@@ -1,0 +1,51 @@
+Variable,Variable definition,Units
+site,site name,NA
+snum,site number,number
+shrub_num,shrub number,number
+year,year,years
+value,ring width values,mm
+site_code,site code,NA
+count,incrementing number preserving the order of the dataframe,number
+xyear,year (text),years
+pi,PI's initials,NA
+pi_full,PI's full name,NA
+shrub_id,shrub ID code,NA
+study_id,study ID code,NA
+site_num,site number,see full species name
+site_genus,site-genus code,number
+sgnum,site-genus number,number
+sample,shrub sample number,number
+site_full,full site name,NA
+subsite,site code,NA
+subsite_full,full subsite name,NA
+latitude,latitude,decimal degrees
+longitude,longitude,decimal degrees
+elevation,elevation,m
+latitude_raw,latitude full precision,decimal degrees
+longitude_raw,longitude full precision,decimal degrees
+elevation_raw,elevation full precision,m
+aspect,aspect,degrees
+soil_moisture,soil moisture (categorical - dry; moist; wet),NA
+herbivory,herbivory (categorical - low; medium; high),NA
+genus,genus code,See full species name
+speciescode,species code (3 letters),See full species name
+species,full species name,NA
+sex,sex of plant,M - male; F - female
+width,canopy width,m
+width2,perpendicular canopy width,m
+height,canopy height,m
+stem,stem width (measured in the field),mm
+sampling_method,method used for sampling,Part of shrub sampled: LS - largest stem; RC - root collar; SI - stem increment; WMS - wintermarksepta
+serial_sections,number of serial sections sampled,number
+number_of_stems,number of stems sampled,number
+radii,number of radii measured,number
+other_info,other relevant information for each site's data,NA
+correlation,correlation among radii,correlation coefficient
+repeatability,correlation among repeated radii,correlation coefficient
+cross_referenced,cross referencing method,TC - if data have been cross-referenced to a tree chronology; SC - if data have been cross-referenced to an existing shrub chronology; SI - if data have been cross-referenced to other shrub individuals at the same site; RA - if data have not been cross-referenced; NA - if not applicable to data
+stem_age,stem age,years
+stemw,stem width (calculated from ring widths),mm
+meanrw,mean ring width,mm
+stdevrw,standard deviation of ring widths,mm
+countrw,number of ring widths,NA
+rw,ring width values,mm

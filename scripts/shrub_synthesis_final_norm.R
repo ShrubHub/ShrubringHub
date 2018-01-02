@@ -1,0 +1,470 @@
+# Shrub growth synthesis mixed model script:
+# This code runs the mixed model analysis for the shrub synthesis manuscript.
+# Written by: Isla Myers-Smith (e-mail: isla.myers-smith@ed.ac.uk)
+# 26 June 2014
+
+# Libraries
+library(plyr)
+library(nlme)
+library(Matrix)
+library(stats)
+library(lmtest)
+library(MuMIn)
+
+# Load data
+load("workspace/shrubhub.RData")
+load("workspace/climate_data.RData")
+
+siteinfosum <- read.csv("scripts/users/imyerssmith/shrub_synthesis/site_info.csv", 
+                     header=TRUE, stringsAsFactors=FALSE)
+siteinfosum <- as.data.frame(unique(cbind(siteinfosum$sgnum, siteinfosum$site, siteinfosum$site_code, siteinfosum$lat, siteinfosum$lon)))
+colnames(siteinfosum) <- c("sgnum", "site", "site_code", "lat", "lon")
+
+# Normalize climate data
+
+# Standardize
+# normalize <- function(x) { scale(x, scale = FALSE) }
+
+# Normalize
+normalize <- function(x) { scale(x, scale = TRUE) }
+
+climate_datan <- climate_data
+
+climate_datan <- ddply(climate_datan, .(site), transform, nfdf = normalize(fdf))
+climate_datan <- ddply(climate_datan, .(site), transform, namt = normalize(amt))
+climate_datan <- ddply(climate_datan, .(site), transform, njunetmp = normalize(junetmp))
+climate_datan <- ddply(climate_datan, .(site), transform, njunetmx = normalize(junetmx))
+climate_datan <- ddply(climate_datan, .(site), transform, njunetmn = normalize(junetmn))
+climate_datan <- ddply(climate_datan, .(site), transform, njulytmp = normalize(julytmp))
+climate_datan <- ddply(climate_datan, .(site), transform, njulytmx = normalize(julytmx))
+climate_datan <- ddply(climate_datan, .(site), transform, njulytmn = normalize(julytmn))
+climate_datan <- ddply(climate_datan, .(site), transform, naugtmp = normalize(augtmp))
+climate_datan <- ddply(climate_datan, .(site), transform, naugtmx = normalize(augtmx))
+climate_datan <- ddply(climate_datan, .(site), transform, naugtmn = normalize(augtmn))
+climate_datan <- ddply(climate_datan, .(site), transform, njjtmp = normalize(jjtmp))
+climate_datan <- ddply(climate_datan, .(site), transform, njjtmx = normalize(jjtmx))
+climate_datan <- ddply(climate_datan, .(site), transform, njjtmn = normalize(jjtmn))
+climate_datan <- ddply(climate_datan, .(site), transform, nastmp = normalize(astmp))
+climate_datan <- ddply(climate_datan, .(site), transform, nastmx = normalize(astmx))
+climate_datan <- ddply(climate_datan, .(site), transform, nastmn = normalize(astmn))
+climate_datan <- ddply(climate_datan, .(site), transform, nwintmp = normalize(wintmp))
+climate_datan <- ddply(climate_datan, .(site), transform, nwintmx = normalize(wintmx))
+climate_datan <- ddply(climate_datan, .(site), transform, nwintmn = normalize(wintmn))
+climate_datan <- ddply(climate_datan, .(site), transform, nmamtmp = normalize(mamtmp))
+climate_datan <- ddply(climate_datan, .(site), transform, nmamtmx = normalize(mamtmx))
+climate_datan <- ddply(climate_datan, .(site), transform, nmamtmn = normalize(mamtmn))
+climate_datan <- ddply(climate_datan, .(site), transform, njunepre = normalize(junepre))
+climate_datan <- ddply(climate_datan, .(site), transform, njulypre = normalize(julypre))
+climate_datan <- ddply(climate_datan, .(site), transform, naugpre = normalize(augpre))
+climate_datan <- ddply(climate_datan, .(site), transform, njjpre = normalize(jjpre))
+climate_datan <- ddply(climate_datan, .(site), transform, naspre = normalize(aspre))
+climate_datan <- ddply(climate_datan, .(site), transform, nwinpre = normalize(winpre))
+climate_datan <- ddply(climate_datan, .(site), transform, nmampre = normalize(mampre))
+climate_datan <- ddply(climate_datan, .(site), transform, nsumcloud = normalize(sumcloud))
+climate_datan <- ddply(climate_datan, .(site), transform, nwetd = normalize(wetd))
+climate_datan <- ddply(climate_datan, .(site), transform, ngscru.length = normalize(gscru.length))
+climate_datan <- ddply(climate_datan, .(site), transform, nspring.tdd = normalize(spring.tdd))
+
+# Merge data frames
+data <- merge(growth.full, climate_data)
+data <- merge(data, climate_datan)
+data[data == "NaN"] <- "NA"
+
+unfactorize <- function(df){
+  for(i in which(sapply(df, class) == "factor")) df[[i]] = as.character(df[[i]])
+  return(df)
+}
+
+data <- unfactorize(data)
+
+# Normalize the data
+norm_data <- data
+
+norm_data <- ddply(norm_data, .(shrub_num), transform, nrw = normalize(rw))
+
+# Print normalized data
+save(norm_data, file="scripts/users/imyerssmith/shrub_synthesis/norm_data2.RData")
+
+# Proportion of individuals that are sensitive to june-july summer temperatures
+ndata <- cbind.data.frame(norm_data$site, norm_data$snum, norm_data$sgnum, norm_data$shrub_num, norm_data$year, norm_data$xyear, norm_data$nrw, norm_data$nfdf, norm_data$namt, norm_data$njunetmp, norm_data$njunetmx, norm_data$njunetmn, norm_data$njulytmp, norm_data$njulytmx, norm_data$njulytmn, norm_data$naugtmp, norm_data$naugtmx, norm_data$naugtmn, norm_data$njjtmp, norm_data$njjtmx, norm_data$njjtmn, norm_data$nastmp, norm_data$nastmx, norm_data$nastmn, norm_data$nwintmp, norm_data$nwintmx, norm_data$nwintmn, norm_data$nmamtmp, norm_data$nmamtmx, norm_data$nmamtmn, norm_data$njunepre, norm_data$njulypre, norm_data$naugpre, norm_data$njjpre, norm_data$naspre, norm_data$nwinpre, norm_data$nmampre)
+names(ndata) <- c("site", "snum", "sgnum", "shrub_num", "year", "xyear", "nrw", "nfdf", "namt", "njunetmp", "njunetmx", "njunetmn", "njulytmp", "njulytmx", "njulytmn", "naugtmp", "naugtmx", "naugtmn", "njjtmp", "njjtmx", "njjtmn", "nastmp", "nastmx", "nastmn", "nwintmp", "nwintmx", "nwintmn", "nmamtmp", "nmamtmx", "nmamtmn", "njunepre", "njulypre", "naugpre", "njjpre", "naspre", "nwinpre", "nmampre")
+ndata <- na.omit(ndata)
+
+k <- 0
+i <- 1
+m <- 1
+length <- length(unique(ndata$sgnum))
+length2 <- length(unique(ndata$shrub_num))
+prop <- as.data.frame(array(0, c(length, 3)))
+names(prop) <- c("sgnum", "nprop", "shrubn")
+lmmodels <- as.data.frame(array(0, c(length2, 9)))
+names(lmmodels) <- c("sgnum", "shrub_num", "lmmodel", "slp", "err", "r2", "pval", "dw", "dwp")
+
+for (i in 1:length) { 
+  data <- ndata
+  data <- subset(data, sgnum == i)
+  
+  l <- k + 1
+  s <- 0
+  t <- 0
+  j <- 1
+  length3 <- length(unique(data$shrub_num))
+  
+  for (j in 1:length3)  { 
+    shrubnum <- unique(data$shrub_num)
+    data1 <- subset(data, shrub_num == shrubnum[j])
+    if (length(data1$nrw) < 3) { 
+      lmmodels[m:(m+8), 1] <- NA  
+      lmmodels[m:(m+8), 2] <- NA
+      lmmodels[m:(m+8), 3] <- NA
+      lmmodels[m:(m+8), 4:9] <- cbind(NA, NA, NA, NA, NA, NA)
+      } else {
+      lmsumn1 <- summary(lm(data1$nrw ~ data1$njjtmp))
+      lmsumn2 <- summary(lm(data1$nrw ~ data1$njjtmx))
+      lmsumn3 <- summary(lm(data1$nrw ~ data1$njjtmn))
+      lmsumn4 <- summary(lm(data1$nrw ~ data1$njunetmp))
+      lmsumn5 <- summary(lm(data1$nrw ~ data1$njunetmx))
+      lmsumn6 <- summary(lm(data1$nrw ~ data1$njunetmn))
+      lmsumn7 <- summary(lm(data1$nrw ~ data1$njulytmp))
+      lmsumn8 <- summary(lm(data1$nrw ~ data1$njulytmx))
+      lmsumn9 <- summary(lm(data1$nrw ~ data1$njulytmn))
+      sgnum <- unique(data1$sgnum)
+      lmmodel <- c("njjtmp", "njjtmx", "njjtmn", "njunetmp", "njunetmx", "njunetmn", "njulytmp", "njulytmx", "njulytmn")
+      slp <- c(lmsumn1$coefficients[[2]], lmsumn2$coefficients[[2]], lmsumn3$coefficients[[2]], lmsumn4$coefficients[[2]], lmsumn5$coefficients[[2]], lmsumn6$coefficients[[2]], lmsumn7$coefficients[[2]], lmsumn8$coefficients[[2]], lmsumn9$coefficients[[2]])
+      err <- c(lmsumn1$coefficients[[4]], lmsumn2$coefficients[[4]], lmsumn3$coefficients[[4]], lmsumn4$coefficients[[4]], lmsumn5$coefficients[[4]], lmsumn6$coefficients[[4]], lmsumn7$coefficients[[4]], lmsumn8$coefficients[[4]], lmsumn9$coefficients[[4]])
+      r2 <- c(lmsumn1$adj.r.squared, lmsumn2$adj.r.squared, lmsumn3$adj.r.squared, lmsumn4$adj.r.squared, lmsumn5$adj.r.squared, lmsumn6$adj.r.squared, lmsumn7$adj.r.squared, lmsumn8$adj.r.squared, lmsumn9$adj.r.squared)
+      pval <- c(lmsumn1$coefficients[8], lmsumn2$coefficients[8], lmsumn3$coefficients[8], lmsumn4$coefficients[8], lmsumn5$coefficients[8], lmsumn6$coefficients[8], lmsumn7$coefficients[8], lmsumn8$coefficients[8], lmsumn9$coefficients[8])
+      dw <- c(dwtest(lmsumn1)[[1]][[1]], dwtest(lmsumn2)[[1]][[1]], dwtest(lmsumn3)[[1]][[1]], dwtest(lmsumn4)[[1]][[1]], dwtest(lmsumn5)[[1]][[1]], dwtest(lmsumn6)[[1]][[1]], dwtest(lmsumn7)[[1]][[1]], dwtest(lmsumn8)[[1]][[1]], dwtest(lmsumn9)[[1]][[1]])
+      dwp <- c(dwtest(lmsumn1)[[4]], dwtest(lmsumn2)[[4]], dwtest(lmsumn3)[[4]], dwtest(lmsumn4)[[4]], dwtest(lmsumn5)[[4]], dwtest(lmsumn6)[[4]], dwtest(lmsumn7)[[4]], dwtest(lmsumn8)[[4]], dwtest(lmsumn9)[[4]])
+      lms <- as.data.frame(cbind(sgnum, lmmodel, slp, err, r2, pval, dw, dwp))
+      names(lms) <- c("sgnum", "lmmodel", "slp", "err", "r2", "pval", "dw", "dwp")
+      lmmodels[m:(m+8), 1] <- as.numeric(unique(data1$sgnum))   
+      lmmodels[m:(m+8), 2] <- as.numeric(unique(data1$shrub_num))
+      lmmodels[m:(m+8), 3] <- as.character(lms$lmmodel)
+      lmmodels[m:(m+8), 4:9] <- cbind(as.numeric(as.character(lms$slp)), as.numeric(as.character(lms$err)), as.numeric(as.character(lms$r2)), as.numeric(as.character(lms$pval)), as.numeric(as.character(lms$dw)), as.numeric(as.character(lms$dwp)))
+      if (min(as.numeric(as.character(lms$pval))) < 0.05) { s <- s + 1 } else { t <- t + 1 }
+    }
+    j <- j + 1
+    m <- m + 9
+  }
+  k <- k + length3
+  prop[i, 1] <- unique(data$sgnum)
+  prop[i, 2] <- s/(s + t)
+  prop[i, 3] <- length3
+  i <- i + 1
+}
+
+propn <- prop
+lmmodelsn <- lmmodels
+
+# Print prop
+save(propn, file="scripts/users/imyerssmith/shrub_synthesis/propn.RData")
+write.csv(propn, file = "scripts/users/imyerssmith/shrub_synthesis/propn.csv", row.names=FALSE)
+
+save(lmmodelsn, file="scripts/users/imyerssmith/shrub_synthesis/lmmodelsn.RData")
+write.csv(lmmodelsn, file = "scripts/users/imyerssmith/shrub_synthesis/lmmodelsn.csv", row.names=FALSE)
+
+# Mixed model analysis
+ndata <- cbind.data.frame(norm_data$site, norm_data$snum, norm_data$sgnum, norm_data$shrub_num, norm_data$year, norm_data$xyear, norm_data$nrw, norm_data$nfdf, norm_data$namt, norm_data$njunetmp, norm_data$njunetmx, norm_data$njunetmn, norm_data$njulytmp, norm_data$njulytmx, norm_data$njulytmn, norm_data$naugtmp, norm_data$naugtmx, norm_data$naugtmn, norm_data$njjtmp, norm_data$njjtmx, norm_data$njjtmn, norm_data$nastmp, norm_data$nastmx, norm_data$nastmn, norm_data$nwintmp, norm_data$nwintmx, norm_data$nwintmn, norm_data$nmamtmp, norm_data$nmamtmx, norm_data$nmamtmn, norm_data$njunepre, norm_data$njulypre, norm_data$naugpre, norm_data$njjpre, norm_data$naspre, norm_data$nwinpre, norm_data$nmampre)
+names(ndata) <- c("site", "snum", "sgnum", "shrub_num", "year", "xyear", "nrw", "nfdf", "namt", "njunetmp", "njunetmx", "njunetmn", "njulytmp", "njulytmx", "njulytmn", "naugtmp", "naugtmx", "naugtmn", "njjtmp", "njjtmx", "njjtmn", "nastmp", "nastmx", "nastmn", "nwintmp", "nwintmx", "nwintmn", "nmamtmp", "nmamtmx", "nmamtmn", "njunepre", "njulypre", "naugpre", "njjpre", "naspre", "nwinpre", "nmampre")
+ndata <- na.omit(ndata)
+gs <- cbind.data.frame(norm_data$sgnum, norm_data$shrub_num, norm_data$year, norm_data$ngscru.length, norm_data$nspring.tdd)
+names(gs) <- c("sgnum", "shrub_num", "year", "ngscru.length", "nspring.tdd")
+ndata <- merge(ndata, gs)
+data <- ndata
+i <- 1
+j <- 1
+k <- 1
+l <- 34
+length <- length(unique(data$sgnum))
+coeff <- as.data.frame(array(0, c(34, 7)))
+colnames(coeff) <- c("model", "estimate", "se", "estimate2", "se2", "aic", "R2MM")
+coeff2 <- as.data.frame(array(0, c(length*34, 8)))
+colnames(coeff2) <- c("sgnum", "model", "estimate", "se", "estimate2", "se2", "aic", "R2MM")
+
+# To change between maximum likelyhood (model comparison) and restricted maximum likelyhood (slope estimation)
+# use method = "ML" or method = "REML"
+
+for (i in 1:length) { 
+  data <- subset(ndata, year >= 1950)
+  data <- subset(data, sgnum == i)  
+  m1n <- lme(nrw ~ njjtmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+  m2n <- lme(nrw ~ njjtmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m3n <- lme(nrw ~ njjtmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m4n <- lme(nrw ~ njunetmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m5n <- lme(nrw ~ njunetmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m6n <- lme(nrw ~ njunetmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m7n <- lme(nrw ~ njulytmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m8n <- lme(nrw ~ njulytmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m9n <- lme(nrw ~ njulytmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m10n <- lme(nrw ~ nastmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m11n <- lme(nrw ~ nastmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m12n <- lme(nrw ~ nastmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m13n <- lme(nrw ~ nmamtmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m14n <- lme(nrw ~ nmamtmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m15n <- lme(nrw ~ nmamtmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m16n <- lme(nrw ~ nwintmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m17n <- lme(nrw ~ nwintmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m18n <- lme(nrw ~ nwintmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m19n <- lme(nrw ~ njunepre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m20n <- lme(nrw ~ njulypre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m21n <- lme(nrw ~ naugpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m22n <- lme(nrw ~ njjpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m23n <- lme(nrw ~ naspre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m24n <- lme(nrw ~ nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m25n <- lme(nrw ~ nmampre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m26n <- lme(nrw ~ njunetmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m27n <- lme(nrw ~ njunetmp + njunepre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m28n <- lme(nrw ~ njulytmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m29n <- lme(nrw ~ njulytmp + njulypre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m30n <- lme(nrw ~ naugtmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m31n <- lme(nrw ~ naugtmp + naugpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m32n <- lme(nrw ~ njjtmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  m33n <- lme(nrw ~ njjtmp + njjpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  mNULLn <- lme(nrw ~ 1, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+  modeln <- list(summary(m1n), summary(m2n), summary(m3n), summary(m4n), summary(m5n), summary(m6n), summary(m7n), summary(m8n), summary(m9n), summary(m10n), summary(m11n), summary(m12n), summary(m13n), summary(m14n), summary(m15n), summary(m16n), summary(m17n), summary(m18n), summary(m19n), summary(m20n), summary(m21n), summary(m22n), summary(m23n), summary(m24n), summary(m25n), summary(m26n), summary(m27n), summary(m28n), summary(m29n), summary(m30n), summary(m31n), summary(m32n), summary(m33n), summary(mNULLn))
+  R2modeln <- list(r.squaredGLMM(m1n), r.squaredGLMM(m2n), r.squaredGLMM(m3n), r.squaredGLMM(m4n), r.squaredGLMM(m5n), r.squaredGLMM(m6n), r.squaredGLMM(m7n), r.squaredGLMM(m8n), r.squaredGLMM(m9n), r.squaredGLMM(m10n), r.squaredGLMM(m11n), r.squaredGLMM(m12n), r.squaredGLMM(m13n), r.squaredGLMM(m14n), r.squaredGLMM(m15n), r.squaredGLMM(m16n), r.squaredGLMM(m17n), r.squaredGLMM(m18n), r.squaredGLMM(m19n), r.squaredGLMM(m20n), r.squaredGLMM(m21n), r.squaredGLMM(m22n), r.squaredGLMM(m23n), r.squaredGLMM(m24n), r.squaredGLMM(m25n), r.squaredGLMM(m26n), r.squaredGLMM(m27n), r.squaredGLMM(m28n), r.squaredGLMM(m29n), r.squaredGLMM(m30n), r.squaredGLMM(m31n), r.squaredGLMM(m32n), r.squaredGLMM(m33n), r.squaredGLMM(mNULLn))
+  
+  for (j in 1:34) { 
+    coef <- as.data.frame(modeln[[j]]$tTable)
+    #model name
+    coeff[j, 1] <- if(is.na(rownames(coef)[2])) { 
+      "NULL" 
+    } else if(is.na(rownames(coef)[3])) { 
+      rownames(coef)[2] 
+    } else { 
+      paste(rownames(coef)[2], "-", rownames(coef)[3]) 
+    }
+    #estimate
+    coeff[j, 2] <- coef[2, 1]
+    #se
+    coeff[j, 3] <- coef[2, 2]
+    if(is.na(coef[3, 1])) {
+      #estimate2
+      coeff[j, 4] <- NA
+      #se2
+      coeff[j, 5] <- NA 
+    } else {
+      #estimate2
+      coeff[j, 4] <- coef[2, 1]
+      #se2
+      coeff[j, 5] <- coef[2, 2]
+    }
+    #AIC
+    coeff[j, 6] <- modeln[[j]]$AIC
+    coeff[j, 7] <- R2modeln[[j]][2]
+    j <- j + 1
+  }
+  coeff2[k:l, 1] <- unique(data$sgnum)
+  coeff2[k:l, 2:8] <- coeff
+  i <- i + 1
+  j <- 1
+  k <- k + 34
+  l <- l + 34
+}
+
+models <- as.data.frame(cbind(coeff2$sgnum, coeff2$model, coeff2$aic, coeff2$R2MM, coeff2$estimate, coeff2$se, coeff2$estimate2, coeff2$se2))
+colnames(models) <- c("sgnum", "model", "aic", "R2MM", "estimate", "se", "estimate2", "se2")
+
+modelsn <- models
+
+# Print models
+save(modelsn, file="scripts/users/imyerssmith/shrub_synthesis/modelsn.RData")
+write.csv(modelsn, file = "scripts/users/imyerssmith/shrub_synthesis/modelsn.csv", row.names=FALSE)
+
+# select models for comparison
+models_sort <- arrange(modelsn, sgnum, aic)
+models_sort$sgnum <- as.numeric(as.character(models_sort$sgnum))
+models_sort$model <- gsub("data\\$", "", models_sort$model)
+best_model <- arrange(ddply(models_sort, .(sgnum), function(x)x[which.min(x$aic), ]), sgnum)
+NULL_model <- subset(models_sort, model == "NULL")
+NULL_model <- NULL_model[!duplicated(NULL_model$sgnum), ]
+summer_model <- subset(models_sort, model == "njjtmp" | model == "njjtmx" | model == "njjtmn" | model == "njunetmp" | model == "njunetmx" | model == "njunetmn" | model == "njulytmp" | model == "njulytmx" | model == "njulytmn" | model == "NULL")
+summer_model <- arrange(ddply(summer_model, .(sgnum), function(x)x[which.min(x$aic), ]), sgnum)
+
+# calculate delta aic values
+model_comp <- merge(best_model, NULL_model, by.x = "sgnum", by.y = "sgnum")
+model_comp <- merge(model_comp, summer_model, by.x = "sgnum", by.y = "sgnum")
+model_comp$estimate.y <- NULL
+model_comp$se.y <- NULL
+model_comp$model.y <- NULL
+model_comp$estimate2.y <- NULL
+model_comp$se2.y <- NULL
+colnames(model_comp) <- c("sgnum", "nmodel_best", "naic_best", "R2MM_best", "nest_best", "nse_best", "nest2_best", "nse2_best", "naic_null", "R2MM_null", "nmodel_summer", "naic_summer", "R2MM_summer", "nest_summer", "nse_summer", "nest2_summer", "nse2_summer")
+model_comp$naic_best <- as.numeric(as.character(model_comp$naic_best))
+model_comp$naic_null <- as.numeric(as.character(model_comp$naic_null))
+model_comp$naic_summer <- as.numeric(as.character(model_comp$naic_summer))
+model_comp <- cbind(model_comp, (model_comp$naic_null-model_comp$naic_best), (model_comp$naic_null-model_comp$naic_summer))
+colnames(model_comp) <- c("sgnum", "nmodel_best", "naic_best", "R2MM_best", "nest_best", "nse_best", "nest2_best", "nse2_best", "naic_null", "R2MM_null", "nmodel_summer", "naic_summer", "R2MM_summer", "nest_summer", "nse_summer", "nest2_summer", "nse2_summer", "ndaic", "ndaic_summer")
+
+# If model comparison is less than 2 set delta aic to 0
+model_comp$ndaic[model_comp$ndaic < 2] <- 0
+model_comp$ndaic_summer[model_comp$ndaic_summer < 2] <- 0
+model_comp <- merge(siteinfosum, model_comp, by.x = "sgnum", by.y = "sgnum")
+model_comp <- merge(model_comp, prop, by.x = "sgnum", by.y = "sgnum")
+
+model_compn <- model_comp
+
+save(model_compn, file="scripts/users/imyerssmith/shrub_synthesis/model_compn.RData")
+write.csv(model_compn, file = "scripts/users/imyerssmith/shrub_synthesis/model_compn.csv", row.names=FALSE)
+
+# Mixed model analysis - random data - When compared to model results allows
+# for a check of "significance" of climate sensitivities
+ndata <- cbind.data.frame(norm_data$site, norm_data$snum, norm_data$sgnum, norm_data$shrub_num, norm_data$year, norm_data$xyear, norm_data$nrw, norm_data$nfdf, norm_data$namt, norm_data$njunetmp, norm_data$njunetmx, norm_data$njunetmn, norm_data$njulytmp, norm_data$njulytmx, norm_data$njulytmn, norm_data$naugtmp, norm_data$naugtmx, norm_data$naugtmn, norm_data$njjtmp, norm_data$njjtmx, norm_data$njjtmn, norm_data$nastmp, norm_data$nastmx, norm_data$nastmn, norm_data$nwintmp, norm_data$nwintmx, norm_data$nwintmn, norm_data$nmamtmp, norm_data$nmamtmx, norm_data$nmamtmn, norm_data$njunepre, norm_data$njulypre, norm_data$naugpre, norm_data$njjpre, norm_data$naspre, norm_data$nwinpre, norm_data$nmampre)
+names(ndata) <- c("site", "snum", "sgnum", "shrub_num", "year", "xyear", "nrw", "nfdf", "namt", "njunetmp", "njunetmx", "njunetmn", "njulytmp", "njulytmx", "njulytmn", "naugtmp", "naugtmx", "naugtmn", "njjtmp", "njjtmx", "njjtmn", "nastmp", "nastmx", "nastmn", "nwintmp", "nwintmx", "nwintmn", "nmamtmp", "nmamtmx", "nmamtmn", "njunepre", "njulypre", "naugpre", "njjpre", "naspre", "nwinpre", "nmampre")
+ndata <- na.omit(ndata)
+gs <- cbind.data.frame(norm_data$sgnum, norm_data$shrub_num, norm_data$year, norm_data$ngscru.length, norm_data$nspring.tdd)
+names(gs) <- c("sgnum", "shrub_num", "year", "ngscru.length", "nspring.tdd")
+ndata <- merge(ndata, gs)
+data <- ndata
+random <- as.data.frame(array(0, c(100, 3)))
+colnames(random) <- c("i", "daic", "daic_summer")
+a <- 1
+
+for (a in 1:100) { 
+  data <- subset(ndata, year >= 1950)  
+  i <- 1
+  j <- 1
+  k <- 1
+  l <- 34
+  length <- length(unique(data$sgnum))
+  coeffr <- as.data.frame(array(0, c(34, 4)))
+  colnames(coeffr) <- c("model", "estimate", "se", "aic")
+  coeff2r <- as.data.frame(array(0, c(length*34, 5)))
+  colnames(coeff2r) <- c("sgnum", "model", "estimate", "se", "aic")
+  
+  for (i in 1:length) { 
+    data <- ndata
+    data <- subset(data, year >= 1950)
+    data$rand <- runif(length(data$nrw), 0, 1)
+    data <- subset(data, sgnum == i)     
+    m1nr <- lme(rand ~ njjtmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+    m2nr <- lme(rand ~ njjtmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m3nr <- lme(rand ~ njjtmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m4nr <- lme(rand ~ njunetmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m5nr <- lme(rand ~ njunetmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m6nr <- lme(rand ~ njunetmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m7nr <- lme(rand ~ njulytmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m8nr <- lme(rand ~ njulytmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m9nr <- lme(rand ~ njulytmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m10nr <- lme(rand ~ nastmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m11nr <- lme(rand ~ nastmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m12nr <- lme(rand ~ nastmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m13nr <- lme(rand ~ nmamtmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m14nr <- lme(rand ~ nmamtmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m15nr <- lme(rand ~ nmamtmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m16nr <- lme(rand ~ nwintmp, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m17nr <- lme(rand ~ nwintmx, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m18nr <- lme(rand ~ nwintmn, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m19nr <- lme(rand ~ njunepre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m20nr <- lme(rand ~ njulypre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m21nr <- lme(rand ~ naugpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m22nr <- lme(rand ~ njjpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m23nr <- lme(rand ~ naspre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m24nr <- lme(rand ~ nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m25nr <- lme(rand ~ nmampre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m26nr <- lme(rand ~ njunetmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m27nr <- lme(rand ~ njunetmp + njunepre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m28nr <- lme(rand ~ njulytmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m29nr <- lme(rand ~ njulytmp + njulypre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m30nr <- lme(rand ~ naugtmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m31nr <- lme(rand ~ naugtmp + naugpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m32nr <- lme(rand ~ njjtmp + nwinpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    m33nr <- lme(rand ~ njjtmp + njjpre, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    mNULLnr <- lme(rand ~ 1, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))
+    modelnr <- list(summary(m1nr), summary(m2nr), summary(m3nr), summary(m4nr), summary(m5nr), summary(m6nr), summary(m7nr), summary(m8nr), summary(m9nr), summary(m10nr), summary(m11nr), summary(m12nr), summary(m13nr), summary(m14nr), summary(m15nr), summary(m16nr), summary(m17nr), summary(m18nr), summary(m19nr), summary(m20nr), summary(m21nr), summary(m22nr), summary(m23nr), summary(m24nr), summary(m25nr), summary(m26nr), summary(m27nr), summary(m28nr), summary(m29nr), summary(m30nr), summary(m31nr), summary(m32nr), summary(m33nr), summary(mNULLnr))
+    
+    for (j in 1:34) { 
+      coefr <- as.data.frame(modelnr[[j]]$tTable)
+      #model name
+      coeffr[j, 1] <- if(is.na(rownames(coefr)[2]))   { 
+        "NULL" 
+      } else if(is.na(rownames(coefr)[3]))   { 
+        rownames(coefr)[2] 
+      } else   { 
+        paste(rownames(coefr)[2], "-", rownames(coefr)[3]) 
+      }
+      #estimate
+      coeffr[j, 2] <- coefr[2, 1]
+      #se
+      coeffr[j, 3] <- coefr[2, 2]
+      #AIC
+      coeffr[j, 4] <- modelnr[[j]]$AIC
+      j <- j + 1
+    }
+    coeff2r[k:l, 1] <- unique(data$sgnum)
+    coeff2r[k:l, 2:5] <- coeffr
+    i <- i + 1
+    j <- 1
+    k <- k + 34
+    l <- l + 34
+  }
+  
+  modelsr <- as.data.frame(cbind(coeff2r$sgnum, coeff2r$model, coeff2r$aic, coeff2r$estimate, coeff2r$se))
+  colnames(modelsr) <- c("sgnum", "model", "aic", "estimate", "se")
+  
+  # select models for comparison
+  models_sortr <- arrange(modelsr, sgnum, aic)
+  models_sortr$sgnum <- as.numeric(as.character(models_sortr$sgnum))
+  models_sortr$model <- gsub("data\\$", "", models_sortr$model)
+  best_modelr <- arrange(ddply(models_sortr, .(sgnum), function(x)x[which.min(x$aic), ]), sgnum)
+  NULL_modelr <- subset(models_sortr, model == "NULL")
+  Summer_modelr <- subset(models_sortr, model == "njjtmp" | model == "njjtmx" | model == "njjtmn" | model == "njunetmp" | model == "njunetmx" | model == "njunetmn" | model == "njulytmp" | model == "njulytmx" | model == "njulytmn" | model == "NULL")
+  Summer_modelr <- arrange(ddply(Summer_modelr, .(sgnum), function(x)x[which.min(x$aic), ]), sgnum)
+  
+  # calculate delta aic values
+  model_compr <- merge(best_modelr, NULL_modelr, by.x = "sgnum", by.y = "sgnum")
+  model_compr <- merge(model_compr, Summer_modelr, by.x = "sgnum", by.y = "sgnum")
+  model_compr$estimate.y <- NULL
+  model_compr$se.y <- NULL
+  model_compr$model.y <- NULL
+  model_compr$estimate2.y <- NULL
+  model_compr$se2.y <- NULL
+  colnames(model_compr) <- c("sgnum", "nmodel_best", "naic_best", "nest_best", "nse_best", "naic_null", "nmodel_summer", "naic_summer", "nest_summer", "nse_summer")
+  model_compr$naic_best <- as.numeric(as.character(model_compr$naic_best))
+  model_compr$naic_null <- as.numeric(as.character(model_compr$naic_null))
+  model_compr$naic_summer <- as.numeric(as.character(model_compr$naic_summer))
+  model_compr <- cbind(model_compr, (model_compr$naic_null-model_compr$naic_best), (model_compr$naic_null-model_compr$naic_summer))
+  colnames(model_compr) <- c("sgnum", "nmodel_best", "naic_best", "nest_best", "nse_best", "naic_null", "nmodel_summer", "naic_summer", "nest_summer", "nse_summer", "ndaic", "ndaic_summer")
+  
+  # If model comparison is less than 2 set delta aic to 0
+  model_compr$ndaic[model_compr$ndaic < 2] <- 0
+  model_compr$ndaic_summer[model_compr$ndaic_summer < 2] <- 0
+  model_compr <- merge(siteinfosum, model_compr, by.x = "sgnum", by.y = "sgnum")
+  model_compr <- merge(model_compr, prop, by.x = "sgnum", by.y = "sgnum")
+  
+  random[a, 1] <- a
+  random[a, 2] <- nnzero(model_compr$ndaic, na.counted = NA)/length(model_compr$ndaic)
+  random[a, 3] <- nnzero(model_compr$ndaic_summer, na.counted = NA)/length(model_compr$ndaic_summer)
+  a <- a + 1
+ }
+
+randomn <- random
+
+save(randomn, file="scripts/users/imyerssmith/shrub_synthesis/randomn.RData")
+write.csv(randomn, file = "scripts/users/imyerssmith/shrub_synthesis/randomn.csv", row.names=FALSE)
+
+# Plot distributions of models run with random data
+hist(randomn$daic)
+dist <- randomn$daic_summer
+dist <- ecdf(dist)
+plot(dist)
+quantile(dist)
+dist(0.2)
+quantile(randomn$daic, .99)
+quantile(randomn$daic_summer, .99)
+
+# The farm - pieces of code that have been put out to pasture
+
+# Models for TDD and growing season length data
+
+# if(sum(is.na(data$nspring.tdd))==0) {
+#   data <- subset(data, !is.na(data$nspring.tdd))
+#   m35n <- lme(nrw ~ nspring.tdd, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+# } else {  m35n <- lme(nrw ~ 1, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+# }
+# if(sum(is.na(data$ngscru.length))==0) {
+#   data <- subset(data, !is.na(ngscru.length))
+#   m36n <- lme(nrw ~ ngscru.length, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+# } else {  m36n <- lme(nrw ~ 1, random=~1|xyear, cor=corAR1(), data = data, method = "ML", control=list(maxIter=1000))  
+# }
