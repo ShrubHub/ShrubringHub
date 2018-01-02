@@ -1,4 +1,6 @@
 # History files
+ShrubringHub.Rproj
+.Rproj
 .Rhistory
 .Rapp.history
 
@@ -31,3 +33,43 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+.Rproj.user
+
+## prevent users to commit to heavy files
+*.zip
+*.tif
+*.shp
+
+## temporary files
+*~
+
+# Word temporary
+~$*.doc*
+
+# Excel temporary
+~$*.xls*
+
+# Excel Backup File
+*.xlk
+
+# PowerPoint temporary
+~$*.ppt*
+
+## prevent mac users to commit .DS_Store files
+*.DS_Store
+.DS_Store
+private/.DS_Store
+
+## prevent to commit the README.. files created by RStudio
+#*README_files/
+*README.html
+*README_cache/
+
+# get rid of icon files
+*.Icon\r\r
+
+## prevent to commit Thumbs.db files
+Thumbs.db
+
+# index.lock files
+index.lock
