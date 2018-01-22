@@ -1,4 +1,4 @@
-# TraitHub
+# ShrubringHub
 This is a GitHub repository for the ShrubHub growthring database
 
 http://shrubhub.biology.ualberta.ca/
